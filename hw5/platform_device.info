@@ -1,0 +1,35 @@
+platform 0 - id : 4213829344
+FULL_PROFILE
+OpenCL 1.2 AMD-APP (1084.4)
+AMD Accelerated Parallel Processing
+Advanced Micro Devices, Inc.
+device 0 - id : 28523040
+Tahiti
+FULL_PROFILE
+OpenCL 1.2 AMD-APP (1084.4)
+address bits: 32
+max work group size: 32
+device 1 - id : 34029008
+Tahiti
+FULL_PROFILE
+OpenCL 1.2 AMD-APP (1084.4)
+address bits: 32
+max work group size: 32
+device 2 - id : 28531040
+Tahiti
+FULL_PROFILE
+OpenCL 1.2 AMD-APP (1084.4)
+address bits: 32
+max work group size: 32
+device 3 - id : 33020464
+Tahiti
+FULL_PROFILE
+OpenCL 1.2 AMD-APP (1084.4)
+address bits: 32
+max work group size: 32
+device 4 - id : 28528272
+Intel(R) Xeon(R) CPU E5-2650 0 @ 2.00GHz
+FULL_PROFILE
+OpenCL 1.2 AMD-APP (1084.4)
+address bits: 64
+max work group size: 64

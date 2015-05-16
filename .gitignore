@@ -1,2 +1,6 @@
 *.out
 *.std*
+*.tar.gz
+*.o
+*.png
+*.point

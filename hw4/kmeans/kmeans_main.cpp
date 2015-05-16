@@ -18,6 +18,7 @@
 unsigned int read_data(FILE* f, float** data_p);
 int timespec_subtract(struct timespec*, struct timespec*, struct timespec*);
 
+int thread_n;
 
 int main(int argc, char** argv)
 {
@@ -29,7 +30,7 @@ int main(int argc, char** argv)
 
     // Check parameters
     if (argc < 4) {
-        fprintf(stderr, "usage: %s <centroid file> <data file> <paritioned result> [<final centroids>] [<iteration number>]\n", argv[0]);
+        fprintf(stderr, "usage: %s <centroid file> <data file> <paritioned result> [<final centroids>] [<iteration number>] [<thread number>]\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -53,6 +54,7 @@ int main(int argc, char** argv)
 
     iteration_n = argc > 5 ? atoi(argv[5]) : DEFAULT_ITERATION;
         
+	thread_n = argc > 6 ? atoi(argv[6]) : 4;
 
     partitioned = (int*)malloc(sizeof(int)*data_n);
 

@@ -13,10 +13,10 @@ recs = []
 for f in os.listdir(os.getcwd()):
 	if f.startswith("task") and f.endswith(".stdout"):
 		fin = open(f, 'r')
-		l = fin.readline().split(' ')
-		row = int(l[2][:-1])
-		l = fin.readline().split(' ')
-		t = float(l[3])
+		l = fin.readline().split(':')
+		row = int(l[1])
+		l = fin.readline().split(':')
+		t = float(l[1])
 		if str(row) not in time_records:
 			time_records[str(row)] = []
 		time_records[str(row)].append(t)
