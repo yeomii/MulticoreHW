@@ -1,0 +1,9 @@
+N is 10000
+global_size is 1024
+work_group_size is 16
+device is gpu
+Time elapsed : 64.881428 sec
+A, B write buffer time elapsed : 1.435678 sec
+kernel time elapsed : 61.607021 sec
+C read buffer time elapsed : 0.162758 sec
+gen A, B time elapsed : 0.853340 sec

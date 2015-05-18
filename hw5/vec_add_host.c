@@ -13,10 +13,11 @@ int read_kernel_src(char **buf, const char* filename){
     fseek(f, 0, SEEK_END);
     length = ftell(f);
     fseek(f, 0, SEEK_SET);
-    *buf = malloc(length);
+    *buf = (char *)calloc(length);
     if (*buf) {
       fread(*buf, 1, length, f);
       fclose(f);
+      buf[length-1] = '\0';
       return 0;
     } else {
       fclose(f);
