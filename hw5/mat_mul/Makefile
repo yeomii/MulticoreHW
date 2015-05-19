@@ -14,4 +14,4 @@ clean:
 	rm -rf $(TARGET) $(OBJS) task*
 
 run: $(TARGET)
-	thorq --add --device gpu ./$(TARGET) -n 20 -g 10 -w 5 -v -c
+	thorq --add --device gpu ./$(TARGET) -n 10000 -g 10000 -w 16

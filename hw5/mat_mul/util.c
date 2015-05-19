@@ -127,11 +127,14 @@ void gen_tile(float **mat, int r, int c, int si, int sj, int ei, int ej)
 {
   int minr = r < ei - si ? r : ei - si;
   int minc = c < ej - sj ? c : ej - sj;
-  for (int i = 0; i < minr; ++i)
+  for (int i = 0; i < r; ++i)
   {
-    for (int j = 0; j < minc; ++j)
+    for (int j = 0; j < c; ++j)
     {
-      (*mat)[i*c + j] = 1;//(si + i) + (sj + j);
+      if (i < minr && j < minc)
+        (*mat)[i*c + j] = si + i;
+      else
+        (*mat)[i*c + j] = 0;
     }
   }
 }

@@ -23,7 +23,7 @@ __kernel void mat_mul(__global float* A,
 	{
 		int tiled_r = ts*t + local_r;
 		int tiled_c = ts*t + local_c;
-		Asub[local_r][local_c] = A[global_r*s + tiled_c];
+		Asub[local_r][local_c] = A[global_r*n + tiled_c];
 		Bsub[local_r][local_c] = B[tiled_r*s + global_c];
 
 		barrier(CLK_LOCAL_MEM_FENCE);
