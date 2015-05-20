@@ -10,8 +10,7 @@
 
 #define MIN(a, b) (((a)<(b)) ? (a) : (b))
 #define MAX(a, b) (((a)>(b)) ? (a) : (b))
-#define GPU_MAX_MEM_ALLOC_SIZE 536870912
-#define CPU_MAX_MEM_ALLOC_SIZE 33823679488
+#define MAX_MEM_ALLOC_LIMIT 100000000
 
 int print_matrix=0;
 int validation=0;
@@ -21,7 +20,6 @@ int N=20;
 int global_size=10;
 int work_group_size=4;
 int use_gpu=1;
-int adding=0;
 
 void host( int n, int tile_size )
 {
@@ -33,7 +31,7 @@ void host( int n, int tile_size )
 
   /* n is evenly divisable by tile_size */ 
   if (n % tile_size != 0)
-    n = (n/tile_size + 1) * tile_size; 
+    n = ((n/tile_size) + 1) * tile_size; 
 
   init_host(&platform, &device, &context, &queue);
   
@@ -130,8 +128,32 @@ void adjust_size()
 	}
 	else
 	{
-		global_size = 1024;
-		work_group_size = 16;
+    work_group_size = 16;
+    if (N % 10000 == 0)
+      global_size = 1000;
+    else
+      global_size = 1024;
+/*
+    int limit = MAX_MEM_ALLOC_SIZE / N;
+    if (limit % 16 != 0)
+      limit = limit - (limit % 16);
+    int fit_global, r = limit; 
+    for(i=limit; i > limit - 1000 ; i-=16)
+    {
+      int t = N % i;
+      if (t == 0)
+      {
+        fit_global = i;
+        break;
+      }
+      else if (t < r)
+      {
+        r = t;
+        fit_global = i;
+      }
+    }
+		global_size = fit_global;
+*/
 	}
 }
 
@@ -140,7 +162,7 @@ int main(int argc, char** argv)
   fprintf(stderr, "start\n");
 
 	parse_opt( argc, argv );
-	//adjust_size();
+	adjust_size();
 
   timer_init();
 	timer_start(1);
