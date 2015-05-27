@@ -18,6 +18,7 @@
 unsigned int read_data(FILE* f, float** data_p);
 int timespec_subtract(struct timespec*, struct timespec*, struct timespec*);
 
+int threads = 4;
 
 int main(int argc, char** argv)
 {
@@ -53,6 +54,8 @@ int main(int argc, char** argv)
 
     iteration_n = argc > 5 ? atoi(argv[5]) : DEFAULT_ITERATION;
         
+    if (argc > 6)
+        threads = atoi(argv[6]);
 
     partitioned = (int*)malloc(sizeof(int)*data_n);
 
