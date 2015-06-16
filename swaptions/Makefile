@@ -1,20 +1,18 @@
-DEF =
+DEF = 
 INCLUDE =
+CXXFLAGS = -std=c++0x -O3
 
 EXEC = swaptions 
 
 ifdef version
-  ifeq "$(version)" "pthreads" 
+  ifeq "$(version)" "pthread" 
     DEF := $(DEF) -DENABLE_THREADS
     CXXFLAGS := $(CXXFLAGS) -pthread
   endif
-  ifeq "$(version)" "tbb"
-    DEF := $(DEF) -DENABLE_THREADS -DTBB_VERSION
-    LIBS := $(LIBS) -ltbb
-  endif
 endif
 
-OBJS= CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o icdf.o \
+OBJS= timers.o \
+	CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o icdf.o \
 	HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
 	HJM_Securities.o
 
