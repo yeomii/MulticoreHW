@@ -84,18 +84,20 @@ __kernel void main(__constant double* ppdFactors,
                    __constant double* pdTotalDrift,
                    __global double* pdSumResult, 
                    const long lTrials,
-                   const int idxBase) // current swaption is idxBase + gid
-{ 
-  // one group to one swaption
-  // one item to chunk size of simulation
+                   const int swaptionBase, // current swaption number is swaptionBase + (gid / numGroupPerSwaption)
+                   const int numGroupPerSwaption) 
+{
+  // multiple group to one swaption
+  // one item to trial chunk size of simulation
 
   int id = get_global_id(0);
   int gid = get_group_id(0);
-  int swaptionIdx = idxBase + gid;
+  int swaptionIdx = swaptionBase + (gid / numGroupPerSwaption);
   int lid = get_local_id(0);
-  int ls = get_local_size(0);
-  long chunk = (lTrials / (long)ls);
-  long lRndSeed = RndSeed + (long)(lid*chunk*Factors*(N-1));
+  int localSize = get_local_size(0);
+  int bid = (gid % numGroupPerSwaption) * localSize + lid;
+  long chunk = (lTrials / (long)(localSize * numGroupPerSwaption));
+  long lRndSeed = RndSeed + (long)(bid * chunk * Factors * (N-1));
   double dStrike = (double)swaptionIdx / (double)Swaptions;
   double sqrt_ddelt = sqrt(ddelt);
   double dStrikeCont = (Compounding == 0) // less than 1
@@ -129,7 +131,7 @@ __kernel void main(__constant double* ppdFactors,
   // Simulations begin ***************************************************
   
   #pragma unroll
-  for (long l = chunk*lid; l < chunk*(lid+1); l++)
+  for (long l = chunk*bid; l < chunk*(bid+1); l++)
   {
     #pragma unroll
     for (int j = 0; j < N; j++) { ppdHJMPath[0][j] = pdForward[j]; }

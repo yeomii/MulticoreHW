@@ -40,6 +40,7 @@ const char* device_name = "GPU";
 
 int nGroupSize = 64;
 int nSwaptions = Swaptions;
+int nGroupPerSwaption = 1; 
 long lTrials = DEFAULT_NUM_TRIALS;
 
 FTYPE *pdSwaptionPrice;
@@ -62,6 +63,7 @@ void parsing(int argc, char *argv[])
     if (!strcmp("-sm", argv[j])) { lTrials = atoi(argv[++j]); }
     else if (!strcmp("-gs", argv[j])) { nGroupSize = atoi(argv[++j]); } 
     else if (!strcmp("-ns", argv[j])) { nSwaptions = atoi(argv[++j]); } 
+    else if (!strcmp("-ps", argv[j])) { nGroupPerSwaption = atoi(argv[++j]); } 
     else {
       fprintf(stderr," usage: \n\t-ns [number of swaptions] \n\t-sm [number of simulations]\n\t-gs [group size]\n"); 
     }
@@ -160,8 +162,8 @@ void init_other_factors()
 int main(int argc, char *argv[])
 {
   int res;
-
   parsing(argc, argv);
+  int blockSize = nGroupSize * nGroupPerSwaption;
  
   // ********* MPI **********************************
 
@@ -178,12 +180,13 @@ int main(int argc, char *argv[])
   if(begin == 0)
   {
     printf("PARSEC Benchmark Suite\n");
-    printf("Number of Simulations: %d, Group Size: %d Number of swaptions: %d device: %s\n", lTrials, nGroupSize, nSwaptions, device_name);
+    printf("Number of Simulations: %d, Group Size: %d Number of swaptions: %d Number of Groups per Swaption : %d device: %s\n", 
+      lTrials, nGroupSize, nSwaptions, nGroupPerSwaption, device_name);
     fflush(NULL);
   }
  // ***********************************************
  
-  const size_t global[1] = { swaptionChunk*nGroupSize };
+  const size_t global[1] = { swaptionChunk*blockSize };
   const size_t local[1] = { nGroupSize };
   
   init_timers();
@@ -194,7 +197,8 @@ int main(int argc, char *argv[])
 
 
   // ********* Calling OpenCL Kernel ****************
-
+  
+  start_timer(1);
   cl_platform_id platform;
   cl_device_id device;
   cl_context context;
@@ -208,7 +212,7 @@ int main(int argc, char *argv[])
   cl_mem memFactors = init_buffer(&context, 1, sizeof(FTYPE) * Factors * (N-1), NULL);
   cl_mem memForward = init_buffer(&context, 1, sizeof(FTYPE) * N, NULL);
   cl_mem memTotalDrifts = init_buffer(&context, 1, sizeof(FTYPE) * (N-1), NULL);
-  cl_mem memSumResult = init_buffer(&context, 0, sizeof(FTYPE) * swaptionChunk * 2  * nGroupSize, NULL);
+  cl_mem memSumResult = init_buffer(&context, 0, sizeof(FTYPE) * swaptionChunk * 2  * blockSize, NULL);
   
   init_other_factors();
   write_buffer(&queue, &memFactors, sizeof(FTYPE)*Factors*(N-1), ppdFactors);
@@ -224,6 +228,7 @@ int main(int argc, char *argv[])
   set_kernel_arg(&kernel, 3, sizeof(cl_mem), (void *) &memSumResult);
   set_kernel_arg(&kernel, 4, sizeof(long), (void *)(&lTrials));
   set_kernel_arg(&kernel, 5, sizeof(int), (void *)(&begin));
+  set_kernel_arg(&kernel, 6, sizeof(int), (void *)(&nGroupPerSwaption));
   
   res = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, global, local, 0, NULL, NULL);
   check("clEnqueueNDRangeKernel", res, NULL, NULL);
@@ -231,10 +236,11 @@ int main(int argc, char *argv[])
   check("finish kernel", res, NULL,NULL);
 
 
-  double *pdSumResult = (double *)malloc(sizeof(FTYPE)*swaptionChunk*2*nGroupSize);
-  read_buffer(&queue, &memSumResult, sizeof(FTYPE)*swaptionChunk*2*nGroupSize, pdSumResult);
+  double *pdSumResult = (double *)malloc(sizeof(FTYPE)*swaptionChunk*2*blockSize);
+  read_buffer(&queue, &memSumResult, sizeof(FTYPE)*swaptionChunk*2*blockSize, pdSumResult);
   res = clFinish(queue);
   check("clFinish", res, NULL, NULL);
+  stop_timer(1);
 
   //**********************************************************
   
@@ -243,10 +249,10 @@ int main(int argc, char *argv[])
   for (int i = 0; i < swaptionChunk;i++)
   {
     double dSum = 0, dSumSquare = 0;
-    for (int j = 0; j < nGroupSize; j++)
+    for (int j = 0; j < blockSize; j++)
     {
-      dSum += pdSumResult[i*2*nGroupSize + j*2];
-      dSumSquare += pdSumResult[i*2*nGroupSize + j*2 + 1];
+      dSum += pdSumResult[i*2*blockSize + j*2];
+      dSumSquare += pdSumResult[i*2*blockSize + j*2 + 1];
     }
     pdSwaptionPrice[i*2] = dSum / lTrials;
     pdSwaptionPrice[i*2 + 1] = sqrt(fabs((dSumSquare-dSum*dSum/lTrials)/(lTrials - 1.0)))/sqrt((double)lTrials);
@@ -276,7 +282,7 @@ int main(int argc, char *argv[])
       }
     }
     stop_timer(0);
-    printf("Elapsed Time : %f\n", read_timer(0));
+    printf("Elapsed Time : %f, kernel Time : %f\n", read_timer(0), read_timer(1));
   }
   MPI_Finalize();
 
@@ -288,7 +294,7 @@ int main(int argc, char *argv[])
   }
 
   stop_timer(0);
-  printf("Elapsed Time : %f\n", read_timer(0));
+  printf("Elapsed Time : %f, kernel Time : %f\n", read_timer(0), read_timer(1));
 
 #endif
 
