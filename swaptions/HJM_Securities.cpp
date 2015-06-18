@@ -45,12 +45,12 @@ void * worker(void *arg){
     end = nSwaptions;
 
   for(int i=beg; i < end; i++) {
-    int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice,  swaptions[i].dStrike, 
+    int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice, swaptions[i].dStrike, 
         swaptions[i].dCompounding, swaptions[i].dMaturity, 
         swaptions[i].dTenor, swaptions[i].dPaymentInterval,
         swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears, 
         swaptions[i].pdYield, swaptions[i].ppdFactors,
-        100, NUM_TRIALS, BLOCK_SIZE, 0);
+        100, NUM_TRIALS, BLOCK_SIZE, i);
     assert(iSuccess == 1);
     swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
     swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
@@ -215,13 +215,11 @@ int main(int argc, char *argv[])
   worker(&threadID);
 
 #endif //ENABLE_THREADS
-
   for (i = 0; i < nSwaptions; i++) {
     fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
         i, swaptions[i].dSimSwaptionMeanPrice, swaptions[i].dSimSwaptionStdError);
 
   }
-
   for (i = 0; i < nSwaptions; i++) {
     free_dvector(swaptions[i].pdYield, 0, swaptions[i].iN-1);
     free_dmatrix(swaptions[i].ppdFactors, 0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);

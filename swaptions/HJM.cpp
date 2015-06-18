@@ -401,7 +401,7 @@ int Discount_Factors_Blocking(FTYPE *pdDiscountFactors,
     } // end Block loop
   } 
 
-  free_dvector(pdexpRes, 0,(iN-1)*BLOCKSIZE-1);
+    free_dvector(pdexpRes, 0,(iN-1)*BLOCKSIZE-1);
   iSuccess = 1;
   return iSuccess;
 }

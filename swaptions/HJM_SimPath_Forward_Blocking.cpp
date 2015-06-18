@@ -8,9 +8,9 @@
 
 void serialB(FTYPE **pdZ, FTYPE **randZ, int BLOCKSIZE, int iN, int iFactors)
 {
-  for(int l=0;l<=iFactors-1;++l){
-    for (int j=1;j<=iN-1;++j){
-      for(int b=0; b<BLOCKSIZE; b++){
+  for(int b=0; b<BLOCKSIZE; b++){
+    for(int l=0;l<=iFactors-1;++l){
+      for (int j=1;j<=iN-1;++j){
         pdZ[l][BLOCKSIZE*j + b]= CumNormalInv(randZ[l][BLOCKSIZE*j + b]);  /* 18% of the total executition time */
       }
     }
@@ -59,15 +59,23 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,  //Matrix that stores gener
   // =====================================================
   // sequentially generating random numbers
 
-  for(int b=0; b<BLOCKSIZE; b++){
-    for(int s=0; s<1; s++){
-      for (j=1;j<=iN-1;++j){
-        for (l=0;l<=iFactors-1;++l){
+  /*
+  for(l=0; l<=iFactors-1; ++l)
+    for(j=1;j<iN-1;++j)
+      for(int s=0; s<1; s++)
+        for (int b=0; b<BLOCKSIZE; b++)
           //compute random number in exact same sequence
           randZ[l][BLOCKSIZE*j + b + s] = RanUnif(lRndSeed);  // 10% of the total executition time 
+  */
+  for(int b=0; b<BLOCKSIZE; b++){
+    //for(int s=0; s<1; s++){
+      for (l=0;l<=iFactors-1;++l){
+        for (j=1;j<=iN-1;++j){
+          //compute random number in exact same sequence
+          randZ[l][BLOCKSIZE*j + b/* + s*/] = RanUnif(lRndSeed);  // 10% of the total executition time 
         }
       }
-    }
+    //}
   }
   // =====================================================
   // shocks to hit various factors for forward curve at t
@@ -86,12 +94,12 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,  //Matrix that stores gener
         for (i=0;i<=iFactors-1;++i){// i steps through the stochastic factors
           dTotalShock += ppdFactors[i][l]* pdZ[i][BLOCKSIZE*j + b];          
         }             
-
         ppdHJMPath[j][BLOCKSIZE*l+b] = ppdHJMPath[j-1][BLOCKSIZE*(l+1)+b]+ pdTotalDrift[l]*ddelt + sqrt_ddelt*dTotalShock;
         //as per formula
       }
     }
   } // end Blocks
+
   // -----------------------------------------------------
 
   free_dmatrix(pdZ, 0, iFactors -1, 0, iN*BLOCKSIZE -1);
