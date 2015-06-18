@@ -1,3 +1,4 @@
+CXX = g++
 DEF = 
 INCLUDE =
 CXXFLAGS = -std=c++0x -O3
@@ -24,6 +25,12 @@ ifdef version
     EXEC := gpu_swaptions
     CXXFLAGS := $(CXXFLAGS) -lOpenCL
   endif
+  ifeq "$(version)" "mpi"
+    OBJS := timers.o opencl_util.o opencl_Securities.o
+    EXEC := mpi_swaptions
+    CXX = mpic++
+    CXXFLAGS := $(CXXFLAGS) -lOpenCL -DMPI -DOMPI_SKIP_MPICXX 
+  endif
   ifeq "$(version)" "test"
     OBJS := timers.o test.o
     EXEC := test_swaption
@@ -43,5 +50,5 @@ $(EXEC): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(DEF) -c $*.c -o $*.o
 
 clean:
-	rm -f $(OBJS) $(EXEC) gpu_swaptions cpu_swaptions opencl_Securities.o opencl_util.o
+	rm -f $(OBJS) $(EXEC) mpi_swaptions gpu_swaptions cpu_swaptions opencl_Securities.o opencl_util.o
 

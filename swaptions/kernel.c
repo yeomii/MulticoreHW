@@ -83,15 +83,20 @@ __kernel void main(__constant double* ppdFactors,
                    __constant double* pdForward,
                    __constant double* pdTotalDrift,
                    __global double* pdSumResult, 
-                   const long lTrials)
-{
+                   const long lTrials,
+                   const int idxBase) // current swaption is idxBase + gid
+{ 
+  // one group to one swaption
+  // one item to chunk size of simulation
+
   int id = get_global_id(0);
   int gid = get_group_id(0);
+  int swaptionIdx = idxBase + gid;
   int lid = get_local_id(0);
-  int gs = get_local_size(0);
-  long chunk = (lTrials / (long)gs);
+  int ls = get_local_size(0);
+  long chunk = (lTrials / (long)ls);
   long lRndSeed = RndSeed + (long)(lid*chunk*Factors*(N-1));
-  double dStrike = (double)gid / (double)Swaptions;
+  double dStrike = (double)swaptionIdx / (double)Swaptions;
   double sqrt_ddelt = sqrt(ddelt);
   double dStrikeCont = (Compounding == 0) // less than 1
                       ? dStrike 

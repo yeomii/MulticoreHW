@@ -9,6 +9,10 @@
 #include "timers.h"
 #include "HJM_type.h"
 
+#ifdef MPI
+#include "mpi.h"
+#endif
+
 #define N 11
 #define Factors 3
 #define Swaptions 128
@@ -43,13 +47,10 @@ FTYPE *pdYield;
 FTYPE *ppdFactors;
 FTYPE factors[Factors][N-1];
 FTYPE pdForward[N];
-FTYPE pdSwapPayoffs[N*Swaptions];
 FTYPE pdTotalDrift[N-1];
 
 void parsing(int argc, char *argv[])
 {
-  printf("PARSEC Benchmark Suite\n");
-  fflush(NULL);
 
   if(argc == 1)
   {
@@ -65,7 +66,6 @@ void parsing(int argc, char *argv[])
       fprintf(stderr," usage: \n\t-ns [number of swaptions] \n\t-sm [number of simulations]\n\t-gs [group size]\n"); 
     }
   }
-  printf("Number of Simulations: %d, Group Size: %d Number of swaptions: %d device: %s\n", lTrials, nGroupSize, nSwaptions, device_name);
 }
 
 void init_factors()
@@ -108,7 +108,6 @@ void init_factors()
 
 void init_swaptions()
 {
-  pdSwaptionPrice = (FTYPE *)malloc(sizeof(FTYPE) * nSwaptions * 2); 
 
   pdYield = (FTYPE *)malloc(sizeof(FTYPE) * N);
   pdYield[0] = .1;
@@ -161,10 +160,30 @@ void init_other_factors()
 int main(int argc, char *argv[])
 {
   int res;
-  
+
   parsing(argc, argv);
-  
-  const size_t global[1] = { nSwaptions*nGroupSize };
+ 
+  // ********* MPI **********************************
+
+  int begin = 0;
+  int swaptionChunk = Swaptions;
+
+#ifdef MPI
+  int comm_size = 0, comm_rank = 0;
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  swaptionChunk /= comm_size; begin = comm_rank * swaptionChunk;
+#endif
+  if(begin == 0)
+  {
+    printf("PARSEC Benchmark Suite\n");
+    printf("Number of Simulations: %d, Group Size: %d Number of swaptions: %d device: %s\n", lTrials, nGroupSize, nSwaptions, device_name);
+    fflush(NULL);
+  }
+ // ***********************************************
+ 
+  const size_t global[1] = { swaptionChunk*nGroupSize };
   const size_t local[1] = { nGroupSize };
   
   init_timers();
@@ -173,7 +192,8 @@ int main(int argc, char *argv[])
   init_factors();
   init_swaptions();
 
-  // **********Calling the Swaption Pricing Routine*****************
+
+  // ********* Calling OpenCL Kernel ****************
 
   cl_platform_id platform;
   cl_device_id device;
@@ -188,7 +208,7 @@ int main(int argc, char *argv[])
   cl_mem memFactors = init_buffer(&context, 1, sizeof(FTYPE) * Factors * (N-1), NULL);
   cl_mem memForward = init_buffer(&context, 1, sizeof(FTYPE) * N, NULL);
   cl_mem memTotalDrifts = init_buffer(&context, 1, sizeof(FTYPE) * (N-1), NULL);
-  cl_mem memSumResult = init_buffer(&context, 0, sizeof(FTYPE) * Swaptions * 2  * nGroupSize, NULL);
+  cl_mem memSumResult = init_buffer(&context, 0, sizeof(FTYPE) * swaptionChunk * 2  * nGroupSize, NULL);
   
   init_other_factors();
   write_buffer(&queue, &memFactors, sizeof(FTYPE)*Factors*(N-1), ppdFactors);
@@ -203,6 +223,7 @@ int main(int argc, char *argv[])
   set_kernel_arg(&kernel, 2, sizeof(cl_mem), (void *) &memTotalDrifts);
   set_kernel_arg(&kernel, 3, sizeof(cl_mem), (void *) &memSumResult);
   set_kernel_arg(&kernel, 4, sizeof(long), (void *)(&lTrials));
+  set_kernel_arg(&kernel, 5, sizeof(int), (void *)(&begin));
   
   res = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, global, local, 0, NULL, NULL);
   check("clEnqueueNDRangeKernel", res, NULL, NULL);
@@ -210,13 +231,16 @@ int main(int argc, char *argv[])
   check("finish kernel", res, NULL,NULL);
 
 
-  double *pdSumResult = (double *)malloc(sizeof(FTYPE)*Swaptions*2*nGroupSize);
-  read_buffer(&queue, &memSumResult, sizeof(FTYPE)*Swaptions*2*nGroupSize, pdSumResult);
+  double *pdSumResult = (double *)malloc(sizeof(FTYPE)*swaptionChunk*2*nGroupSize);
+  read_buffer(&queue, &memSumResult, sizeof(FTYPE)*swaptionChunk*2*nGroupSize, pdSumResult);
   res = clFinish(queue);
   check("clFinish", res, NULL, NULL);
 
   //**********************************************************
-  for (int i = 0; i < Swaptions;i++)
+  
+  pdSwaptionPrice = (FTYPE *)malloc(sizeof(FTYPE) * swaptionChunk * 2); 
+  
+  for (int i = 0; i < swaptionChunk;i++)
   {
     double dSum = 0, dSumSquare = 0;
     for (int j = 0; j < nGroupSize; j++)
@@ -227,14 +251,48 @@ int main(int argc, char *argv[])
     pdSwaptionPrice[i*2] = dSum / lTrials;
     pdSwaptionPrice[i*2 + 1] = sqrt(fabs((dSumSquare-dSum*dSum/lTrials)/(lTrials - 1.0)))/sqrt((double)lTrials);
   }
-  for (int i = 0; i < nSwaptions; i++) {
+
+  //**********************************************************
+
+#ifdef MPI
+
+  if (comm_rank != 0)
+  {
+    MPI_Send((void *)pdSwaptionPrice, swaptionChunk * 2, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+  }
+  else
+  {
+    for (int i = 0; i < swaptionChunk; i++) {
+      fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
+        i, pdSwaptionPrice[i*2], pdSwaptionPrice[i*2+1]);
+    }
+    for (int r = 1; r < comm_size; r++)
+    {
+      MPI_Recv((void *)pdSwaptionPrice, swaptionChunk * 2, MPI_DOUBLE, r, 0, MPI_COMM_WORLD, NULL);
+
+      for (int i = 0; i < swaptionChunk; i++) {
+        fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
+            i + r*swaptionChunk, pdSwaptionPrice[i*2], pdSwaptionPrice[i*2+1]);
+      }
+    }
+    stop_timer(0);
+    printf("Elapsed Time : %f\n", read_timer(0));
+  }
+  MPI_Finalize();
+
+#else
+
+  for (int i = 0; i < swaptionChunk; i++) {
     fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
         i, pdSwaptionPrice[i*2], pdSwaptionPrice[i*2+1]);
   }
-  //***********************************************************
 
   stop_timer(0);
   printf("Elapsed Time : %f\n", read_timer(0));
+
+#endif
+
+  //***********************************************************
 
   return 0;
 }
