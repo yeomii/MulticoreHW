@@ -14,6 +14,11 @@ ifdef version
     DEF := $(DEF) -DENABLE_THREADS
     CXXFLAGS := $(CXXFLAGS) -pthread
   endif
+  ifeq "$(version)" "cpu"
+    OBJS := timers.o opencl_util.o opencl_Securities.o
+    EXEC := cpu_swaptions
+    CXXFLAGS := $(CXXFLAGS) -lOpenCL -DCPU
+  endif
   ifeq "$(version)" "gpu"
     OBJS := timers.o opencl_util.o opencl_Securities.o
     EXEC := gpu_swaptions
@@ -24,7 +29,6 @@ ifdef version
     EXEC := test_swaption
     CXXFLAGS := $(CXXFLAGS) -lm
   endif
-
 endif
 
 all: $(EXEC)
@@ -39,5 +43,5 @@ $(EXEC): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(DEF) -c $*.c -o $*.o
 
 clean:
-	rm -f $(OBJS) $(EXEC)
+	rm -f $(OBJS) $(EXEC) gpu_swaptions cpu_swaptions opencl_Securities.o opencl_util.o
 

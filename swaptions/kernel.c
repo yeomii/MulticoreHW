@@ -111,10 +111,10 @@ __kernel void main(__constant double* ppdFactors,
  
   double pdZ[Factors][N];
  
-  #pragma unroll
+  //#pragma unroll
   for (int i = 0; i < iSwapVectorLength; i++)
     pdSwapPayoffs[i] = 0.0;
-  #pragma unroll
+  //#pragma unroll
   for (int i = iFreqRatio; i <= iSwapTimePoints; i += iFreqRatio)
   {
     if (i != iSwapTimePoints) { pdSwapPayoffs[i] = dSwapPayoffs - 1; }

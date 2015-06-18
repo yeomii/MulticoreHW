@@ -26,8 +26,15 @@
 #define dSwapVectorFactor 0.5 // (double) (dSwapVectorYears / iSwapVectorLength)
 #define iFreqRatio 2          // (int)    (PaymentInterval/ddelt + 0.5)
 
+#ifdef CPU
 int use_gpu = 0;
-int nGroupSize = 8;
+const char* device_name = "CPU";
+#else
+int use_gpu = 1;
+const char* device_name = "GPU";
+#endif
+
+int nGroupSize = 64;
 int nSwaptions = Swaptions;
 long lTrials = DEFAULT_NUM_TRIALS;
 
@@ -58,12 +65,7 @@ void parsing(int argc, char *argv[])
       fprintf(stderr," usage: \n\t-ns [number of swaptions] \n\t-sm [number of simulations]\n\t-gs [group size]\n"); 
     }
   }
-/*
-  // temporarily groupsize equals number of swaptions 
-  if (nGroupSize > 0)
-    nGroupSize = nSwaptions;
-*/
-  printf("Number of Simulations: %d,  Group Size: %d Number of swaptions: %d\n", lTrials, nGroupSize, nSwaptions);
+  printf("Number of Simulations: %d, Group Size: %d Number of swaptions: %d device: %s\n", lTrials, nGroupSize, nSwaptions, device_name);
 }
 
 void init_factors()
@@ -162,9 +164,8 @@ int main(int argc, char *argv[])
   
   parsing(argc, argv);
   
-  const size_t global_a[1] = { nSwaptions };
-  const size_t global_b[1] = { nSwaptions*nGroupSize };
-  const size_t local[1] = { nGroupSize }; //{ nGroupSize };
+  const size_t global[1] = { nSwaptions*nGroupSize };
+  const size_t local[1] = { nGroupSize };
   
   init_timers();
   start_timer(0);
@@ -180,25 +181,14 @@ int main(int argc, char *argv[])
   cl_command_queue queue;
   init_host(&platform, &device, &context, &queue);
 
-  cl_program program_a, program_b;
-  cl_kernel kernel_a, kernel_b;
-  init_kernel("kernel_a.c", "main", &program_a, &kernel_a, &context, &device);
-  init_kernel("kernel_b.c", "main", &program_b, &kernel_b, &context, &device);
+  cl_program program;
+  cl_kernel kernel;
+  init_kernel("kernel.c", "main", &program, &kernel, &context, &device);
   
   cl_mem memFactors = init_buffer(&context, 1, sizeof(FTYPE) * Factors * (N-1), NULL);
   cl_mem memForward = init_buffer(&context, 1, sizeof(FTYPE) * N, NULL);
   cl_mem memTotalDrifts = init_buffer(&context, 1, sizeof(FTYPE) * (N-1), NULL);
-  
   cl_mem memSumResult = init_buffer(&context, 0, sizeof(FTYPE) * Swaptions * 2  * nGroupSize, NULL);
-  cl_mem memSwapPayoffs = init_buffer(&context, 0, sizeof(FTYPE) * Swaptions * iSwapVectorLength, NULL);
-  cl_mem memSwaptionPrice = init_buffer(&context, 0, sizeof(FTYPE) * Swaptions * 2, NULL);
-  
-  res = clFinish(queue);
-  check("finish write", res, NULL,NULL);
-
-  set_kernel_arg(&kernel_a, 0, sizeof(cl_mem), (void *) &memSwapPayoffs);
-  res = clEnqueueNDRangeKernel(queue, kernel_a, 1, NULL, global_a, local, 0, NULL, NULL);
-  check("clEnqueueNDRangeKernel", res, NULL, NULL);
   
   init_other_factors();
   write_buffer(&queue, &memFactors, sizeof(FTYPE)*Factors*(N-1), ppdFactors);
@@ -206,39 +196,26 @@ int main(int argc, char *argv[])
   write_buffer(&queue, &memTotalDrifts, sizeof(FTYPE)*(N-1), pdTotalDrift);
 
   res = clFinish(queue);
-  check("finish kernel_a, write buffer", res, NULL, NULL);
+  check("finish kernel, write buffer", res, NULL, NULL);
 
-  read_buffer(&queue, &memSwapPayoffs, sizeof(FTYPE)*Swaptions*iSwapVectorLength, pdSwapPayoffs);
+  set_kernel_arg(&kernel, 0, sizeof(cl_mem), (void *) &memFactors);
+  set_kernel_arg(&kernel, 1, sizeof(cl_mem), (void *) &memForward);
+  set_kernel_arg(&kernel, 2, sizeof(cl_mem), (void *) &memTotalDrifts);
+  set_kernel_arg(&kernel, 3, sizeof(cl_mem), (void *) &memSumResult);
+  set_kernel_arg(&kernel, 4, sizeof(long), (void *)(&lTrials));
   
-  set_kernel_arg(&kernel_b, 0, sizeof(cl_mem), (void *) &memFactors);
-  set_kernel_arg(&kernel_b, 1, sizeof(cl_mem), (void *) &memForward);
-  set_kernel_arg(&kernel_b, 2, sizeof(cl_mem), (void *) &memTotalDrifts);
-  set_kernel_arg(&kernel_b, 3, sizeof(cl_mem), (void *) &memSwapPayoffs);
-  set_kernel_arg(&kernel_b, 4, sizeof(cl_mem), (void *) &memSumResult);
-  //set_kernel_arg(&kernel_b, 4, sizeof(cl_mem), (void *) &memSwaptionPrice);
-  set_kernel_arg(&kernel_b, 5, sizeof(long), (void *)(&lTrials));
-  
-  res = clEnqueueNDRangeKernel(queue, kernel_b, 1, NULL, global_b, local, 0, NULL, NULL);
+  res = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, global, local, 0, NULL, NULL);
   check("clEnqueueNDRangeKernel", res, NULL, NULL);
   res = clFinish(queue);
-  check("finish kernel_b", res, NULL,NULL);
+  check("finish kernel", res, NULL,NULL);
 
 
   double *pdSumResult = (double *)malloc(sizeof(FTYPE)*Swaptions*2*nGroupSize);
   read_buffer(&queue, &memSumResult, sizeof(FTYPE)*Swaptions*2*nGroupSize, pdSumResult);
-  //read_buffer(&queue, &memSwaptionPrice, sizeof(FTYPE)*Swaptions*2, pdSwaptionPrice);
   res = clFinish(queue);
   check("clFinish", res, NULL, NULL);
 
   //**********************************************************
-  /*
-  for (int i = 0; i < Swaptions; i++)
-  {
-    fprintf(stderr, "Swaption %d\n", i);
-    for (int j = 0; j < iSwapVectorLength; j++)
-      fprintf(stderr, "pdSwapPayoffs[%d] = %lf\n", j, pdSwapPayoffs[i*iSwapVectorLength + j]);
-  }
-*/
   for (int i = 0; i < Swaptions;i++)
   {
     double dSum = 0, dSumSquare = 0;
