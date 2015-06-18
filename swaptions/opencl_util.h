@@ -10,7 +10,7 @@ void init_host(cl_platform_id* platform, cl_device_id* device,
 
 void init_kernel(const char* src_name, const char* method_name,
                  cl_program* program, cl_kernel* kernel, 
-                 cl_context* context, cl_device_id* device);
+                 cl_context* context, cl_device_id* device, cl_uint num_devices);
 
 cl_mem init_buffer(cl_context* context, int read_only, 
                    size_t size, void* host_ptr);

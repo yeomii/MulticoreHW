@@ -76,7 +76,7 @@ void init_host(cl_platform_id* platform, cl_device_id* device,
 
 void init_kernel(const char* src_name, const char* method_name,
     cl_program* program, cl_kernel* kernel, 
-    cl_context* context, cl_device_id* device)
+    cl_context* context, cl_device_id* device, cl_uint num_devices)
 {
   cl_int res;
   char* kernel_src;
@@ -86,7 +86,7 @@ void init_kernel(const char* src_name, const char* method_name,
   *program = clCreateProgramWithSource(
       *context, 1, (const char **)&kernel_src, &kernel_src_len, &res);
   check("clCreateProgramWithSource", res, NULL, NULL);
-  res = clBuildProgram(*program, 1, device, NULL, NULL, NULL);
+  res = clBuildProgram(*program, num_devices, device, NULL, NULL, NULL);
   check("clBuildProgram", res, program, device);
   *kernel = clCreateKernel(*program, method_name, &res);
   check("clCreateKernel", res, NULL, NULL);
