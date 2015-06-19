@@ -18,7 +18,8 @@ ifdef version
   ifeq "$(version)" "cpu"
     OBJS := timers.o opencl_util.o opencl_Securities.o
     EXEC := cpu_swaptions
-    CXXFLAGS := $(CXXFLAGS) -lOpenCL -DCPU
+    DEF := $(DEF) -DCPU
+    CXXFLAGS := $(CXXFLAGS) -lOpenCL
   endif
   ifeq "$(version)" "gpu"
     OBJS := timers.o opencl_util.o opencl_Securities.o
@@ -28,8 +29,17 @@ ifdef version
   ifeq "$(version)" "mpi"
     OBJS := timers.o opencl_util.o opencl_Securities.o
     EXEC := mpi_swaptions
+    DEF := $(DEF) -DMPI -DOMPI_SKIP_MPICXX
     CXX = mpic++
-    CXXFLAGS := $(CXXFLAGS) -lOpenCL -DMPI -DOMPI_SKIP_MPICXX 
+    CXXFLAGS := $(CXXFLAGS) -lOpenCL
+  endif
+  ifeq "$(version)" "snucl"
+    OBJS := timers.o opencl_util.o opencl_Securities.o
+    EXEC := snucl_swaptions
+    DEF := $(DEF) -DSNUCL -DOMPI_SKIP_MPICXX
+    CXX = mpic++
+    INCLUDE := $(INCLUDE) -I$(SNUCLROOT)/inc
+    LDFLAGS = -L$(SNUCLROOT)/lib -lsnucl_cluster -lOpenCL
   endif
   ifeq "$(version)" "test"
     OBJS := timers.o test.o
@@ -50,5 +60,5 @@ $(EXEC): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(DEF) -c $*.c -o $*.o
 
 clean:
-	rm -f $(OBJS) $(EXEC) mpi_swaptions gpu_swaptions cpu_swaptions opencl_Securities.o opencl_util.o
+	rm -f $(OBJS) $(EXEC) snucl_swaptions mpi_swaptions gpu_swaptions cpu_swaptions opencl_Securities.o opencl_util.o
 

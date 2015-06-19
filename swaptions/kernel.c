@@ -85,7 +85,7 @@ __kernel void main(__constant double* ppdFactors,
                    __global double* pdSumResult, 
                    const long lTrials,
                    const int swaptionBase, // current swaption number is swaptionBase + (gid / numGroupPerSwaption)
-                   const int numGroupPerSwaption) 
+                   const int numGroupPerSwaption)
 {
   // multiple group to one swaption
   // one item to trial chunk size of simulation
@@ -142,10 +142,10 @@ __kernel void main(__constant double* ppdFactors,
       for (int j = 0; j < N; j++) 
         ppdHJMPath[i][j] = 0.0;
     
-    #pragma unroll
+    //#pragma unroll
     for (int i = 0; i < Factors; i++)
     {
-      #pragma unroll
+      //#pragma unroll
       for (int j = 1; j < N; j++)
       {
         pdZ[i][j] = CumNormalInv(RanUnif(&lRndSeed));

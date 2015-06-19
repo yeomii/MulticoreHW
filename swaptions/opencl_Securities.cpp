@@ -13,6 +13,7 @@
 #include "mpi.h"
 #endif
 
+#define MAX_DEV 16
 #define N 11
 #define Factors 3
 #define Swaptions 128
@@ -32,9 +33,11 @@
 
 #ifdef CPU
 int use_gpu = 0;
+int nd = 1;
 const char* device_name = "CPU";
 #else
 int use_gpu = 1;
+int nd = 4;
 const char* device_name = "GPU";
 #endif
 
@@ -167,17 +170,26 @@ int main(int argc, char *argv[])
  
   // ********* MPI **********************************
 
-  int begin = 0;
-  int swaptionChunk = Swaptions;
+  int begin[MAX_DEV] = { 0, 0, 0, 0 };
+  int swaptionChunk = Swaptions; // per process
 
+#ifdef SNUCL
+  nd = 4;
+#endif
 #ifdef MPI
   int comm_size = 0, comm_rank = 0;
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  swaptionChunk /= comm_size; begin = comm_rank * swaptionChunk;
+  swaptionChunk /= comm_size; 
+  for (int i=0; i<nd; i++)
+    begin[i] = comm_rank * swaptionChunk + i * swaptionChunk / nd;
+#else
+  for (int i=0; i<nd; i++)
+    begin[i] = (swaptionChunk / nd) * i;
 #endif
-  if(begin == 0)
+
+  if(begin[0] == 0)
   {
     printf("PARSEC Benchmark Suite\n");
     printf("Number of Simulations: %d, Group Size: %d Number of swaptions: %d Number of Groups per Swaption : %d device: %s\n", 
@@ -186,7 +198,7 @@ int main(int argc, char *argv[])
   }
  // ***********************************************
  
-  const size_t global[1] = { swaptionChunk*blockSize };
+  const size_t global[1] = { swaptionChunk/nd * blockSize };
   const size_t local[1] = { nGroupSize };
   
   init_timers();
@@ -200,46 +212,66 @@ int main(int argc, char *argv[])
   
   start_timer(1);
   cl_platform_id platform;
-  cl_device_id device;
+  cl_device_id device[MAX_DEV];
   cl_context context;
-  cl_command_queue queue;
-  init_host(&platform, &device, &context, &queue);
+  cl_command_queue queue[MAX_DEV];
+  
+  clGetPlatformIDs(1, &platform, NULL);
+  if (use_gpu != 0) { clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, nd, device, NULL); }
+  else { clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, nd, device, NULL); }
+  context = clCreateContext(NULL, nd, device, NULL, NULL, NULL);
+  for (int i=0; i<nd; i++) { queue[i] = clCreateCommandQueue(context, device[i], 0, NULL); }
 
   cl_program program;
   cl_kernel kernel;
-  init_kernel("kernel.c", "main", &program, &kernel, &context, &device, 1);
+  init_kernel("kernel.c", "main", &program, &kernel, &context, device, nd);
   
+  int resultSize = (swaptionChunk / nd) * 2 * blockSize;
   cl_mem memFactors = init_buffer(&context, 1, sizeof(FTYPE) * Factors * (N-1), NULL);
   cl_mem memForward = init_buffer(&context, 1, sizeof(FTYPE) * N, NULL);
   cl_mem memTotalDrifts = init_buffer(&context, 1, sizeof(FTYPE) * (N-1), NULL);
-  cl_mem memSumResult = init_buffer(&context, 0, sizeof(FTYPE) * swaptionChunk * 2  * blockSize, NULL);
+  cl_mem memSumResult[MAX_DEV];
+  for (int i=0; i<nd; i++) 
+    memSumResult[i] = init_buffer(&context, 0, sizeof(FTYPE) * resultSize, NULL);
   
   init_other_factors();
-  write_buffer(&queue, &memFactors, sizeof(FTYPE)*Factors*(N-1), ppdFactors);
-  write_buffer(&queue, &memForward, sizeof(FTYPE)*N, pdForward);
-  write_buffer(&queue, &memTotalDrifts, sizeof(FTYPE)*(N-1), pdTotalDrift);
 
-  res = clFinish(queue);
-  check("finish kernel, write buffer", res, NULL, NULL);
+#ifdef SNUCL
+  for(int i=0; i<nd; i++)
+  {
+    write_buffer(&(queue[i]), &memFactors, sizeof(FTYPE)*Factors*(N-1), ppdFactors);
+    write_buffer(&(queue[i]), &memForward, sizeof(FTYPE)*N, pdForward);
+    write_buffer(&(queue[i]), &memTotalDrifts, sizeof(FTYPE)*(N-1), pdTotalDrift);
+  }
+  for (int i=0; i<nd; i++) clFinish(queue[i]);
+#else
+  write_buffer(&(queue[0]), &memFactors, sizeof(FTYPE)*Factors*(N-1), ppdFactors);
+  write_buffer(&(queue[0]), &memForward, sizeof(FTYPE)*N, pdForward);
+  write_buffer(&(queue[0]), &memTotalDrifts, sizeof(FTYPE)*(N-1), pdTotalDrift);
+#endif
 
   set_kernel_arg(&kernel, 0, sizeof(cl_mem), (void *) &memFactors);
   set_kernel_arg(&kernel, 1, sizeof(cl_mem), (void *) &memForward);
   set_kernel_arg(&kernel, 2, sizeof(cl_mem), (void *) &memTotalDrifts);
-  set_kernel_arg(&kernel, 3, sizeof(cl_mem), (void *) &memSumResult);
   set_kernel_arg(&kernel, 4, sizeof(long), (void *)(&lTrials));
-  set_kernel_arg(&kernel, 5, sizeof(int), (void *)(&begin));
   set_kernel_arg(&kernel, 6, sizeof(int), (void *)(&nGroupPerSwaption));
   
-  res = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, global, local, 0, NULL, NULL);
-  check("clEnqueueNDRangeKernel", res, NULL, NULL);
-  res = clFinish(queue);
-  check("finish kernel", res, NULL,NULL);
+  for (int i=0; i<nd; i++)
+  {
+    set_kernel_arg(&kernel, 3, sizeof(cl_mem), (void *) &(memSumResult[i]));
+    set_kernel_arg(&kernel, 5, sizeof(int), (void *)&(begin[i]));
+    res = clEnqueueNDRangeKernel(queue[i], kernel, 1, NULL, global, local, 0, NULL, NULL);
+    check("clEnqueueNDRangeKernel", res, NULL, NULL);
+#ifdef SNUCL
+    clFinish(queue[i]);
+#endif
+  }
 
-
-  double *pdSumResult = (double *)malloc(sizeof(FTYPE)*swaptionChunk*2*blockSize);
-  read_buffer(&queue, &memSumResult, sizeof(FTYPE)*swaptionChunk*2*blockSize, pdSumResult);
-  res = clFinish(queue);
-  check("clFinish", res, NULL, NULL);
+  double *pdSumResult = (double *)malloc(sizeof(FTYPE) * resultSize * nd);
+  for (int i=0; i<nd; i++)
+    read_buffer(&(queue[i]), &(memSumResult[i]), sizeof(FTYPE) * resultSize, (pdSumResult + i*resultSize));
+  for (int i=0; i<nd; i++) clFinish(queue[i]);
+  
   stop_timer(1);
 
   //**********************************************************
