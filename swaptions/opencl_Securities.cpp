@@ -269,9 +269,11 @@ int main(int argc, char *argv[])
 
   double *pdSumResult = (double *)malloc(sizeof(FTYPE) * resultSize * nd);
   for (int i=0; i<nd; i++)
+  {
+    clFinish(queue[i]);
     read_buffer(&(queue[i]), &(memSumResult[i]), sizeof(FTYPE) * resultSize, (pdSumResult + i*resultSize));
+  }
   for (int i=0; i<nd; i++) clFinish(queue[i]);
-  
   stop_timer(1);
 
   //**********************************************************

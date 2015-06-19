@@ -15,7 +15,11 @@ ifdef version
     DEF := $(DEF) -DENABLE_THREADS
     CXXFLAGS := $(CXXFLAGS) -pthread
   endif
-  ifeq "$(version)" "cpu"
+  ifeq "$(version)" "tbb"
+    DEF := $(DEF) -DENABLE_THREADS -DTBB_VERSION
+    LIBS := $(LIBS) -ltbb
+  endif
+ ifeq "$(version)" "cpu"
     OBJS := timers.o opencl_util.o opencl_Securities.o
     EXEC := cpu_swaptions
     DEF := $(DEF) -DCPU
@@ -40,11 +44,6 @@ ifdef version
     CXX = mpic++
     INCLUDE := $(INCLUDE) -I$(SNUCLROOT)/inc
     LDFLAGS = -L$(SNUCLROOT)/lib -lsnucl_cluster -lOpenCL
-  endif
-  ifeq "$(version)" "test"
-    OBJS := timers.o test.o
-    EXEC := test_swaption
-    CXXFLAGS := $(CXXFLAGS) -lm
   endif
 endif
 

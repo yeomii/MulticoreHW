@@ -126,7 +126,7 @@ void read_buffer(cl_command_queue *queue, cl_mem *mem, size_t size, void *ptr)
 {
   cl_int res;
   res = clEnqueueReadBuffer(
-      *queue, *mem, CL_TRUE, 0, size, ptr, 0, NULL, NULL);
+      *queue, *mem, CL_FALSE, 0, size, ptr, 0, NULL, NULL);
   check("clEnqueueReadBuffer", res, NULL, NULL);
 }
 

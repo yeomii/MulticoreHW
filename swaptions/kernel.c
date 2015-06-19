@@ -130,15 +130,15 @@ __kernel void main(__constant double* ppdFactors,
   
   // Simulations begin ***************************************************
   
-  #pragma unroll
+  //#pragma unroll
   for (long l = chunk*bid; l < chunk*(bid+1); l++)
   {
-    #pragma unroll
+    //#pragma unroll
     for (int j = 0; j < N; j++) { ppdHJMPath[0][j] = pdForward[j]; }
 
-    #pragma unroll
+    //#pragma unroll
     for (int i = 1; i < N; i++)
-      #pragma unroll
+      //#pragma unroll
       for (int j = 0; j < N; j++) 
         ppdHJMPath[i][j] = 0.0;
     
